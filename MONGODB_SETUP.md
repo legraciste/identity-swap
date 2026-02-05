@@ -1,0 +1,22 @@
+#!/bin/bash
+# Script pour tester les credentials MongoDB
+
+echo "=== Test des credentials MongoDB ==="
+echo ""
+echo "MONGODB_URI actuelle (sans password):"
+echo "mongodb+srv://jpleg2626_db_user:****@cluster0.knpunjr.mongodb.net/"
+echo ""
+echo "Vérifie que:"
+echo "1. Le nom d'utilisateur est: jpleg2626_db_user"
+echo "2. Le password est: 06qe1lAAY2KBdVy0"
+echo "3. Le cluster est: cluster0.knpunjr.mongodb.net"
+echo "4. L'IP est whitelistée dans MongoDB Atlas"
+echo ""
+echo "Si tu as une erreur 'bad auth', c'est que les credentials sont incorrects."
+echo "Vérifie dans MongoDB Atlas -> Security -> Database Access"
+echo ""
+echo "Ou tu peux créer une nouvelle URI:"
+echo "- Va sur https://cloud.mongodb.com"
+echo "- Connecte-toi avec ton compte"
+echo "- Va dans Database -> Connect"
+echo "- Copie l'URI complète avec tes credentials"
