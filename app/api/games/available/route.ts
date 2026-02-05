@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
             interests: creatorProfile.interests || [],
           },
           current_players: game.participants?.length || 0,
-          max_players: 4,
+          max_players: 15,
         };
       })
     )).filter(Boolean);
