@@ -25,19 +25,13 @@ export async function GET(request: NextRequest) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
-      const changeStream = games.watch([
-        {
-          $match: {
-            'fullDocument.id': gameId,
-            operationType: { $in: ['update', 'replace'] }
-          }
-        }
-      ]);
+      // Watch ALL changes on games collection, then filter by gameId
+      const changeStream = games.watch();
 
-      changeStream.on('change', async () => {
+      changeStream.on('change', async (change) => {
+        // Check if this change affects our game
         const game = await games.findOne({ id: gameId });
         if (game) {
-          // Envoie l'état du jeu complètement
           sendEvent({
             game,
             timestamp: Date.now()
