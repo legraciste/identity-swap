@@ -121,7 +121,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
   const { fetchWithAuth } = useAPI();
   const { token } = useAuth();
   const votesStreamRef = useRef<EventSource | null>(null);
-  const miniGameStreamRef = useRef<EventSource | null>(null);
+  const gameSyncStreamRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
     const handleReturnToLobby = () => {
@@ -130,6 +130,10 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
       if (votesStreamRef.current) {
         votesStreamRef.current.close();
         votesStreamRef.current = null;
+      }
+      if (gameSyncStreamRef.current) {
+        gameSyncStreamRef.current.close();
+        gameSyncStreamRef.current = null;
       }
     };
     window.addEventListener('returnToLobby', handleReturnToLobby);
@@ -143,6 +147,49 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
       setVotes({});
     }
   }, [game?.status]);
+
+  // UNIFIED GAME SYNC STREAM - All game changes broadcast to all players
+  useEffect(() => {
+    if (!game?.id || !token) return;
+
+    const stream = new EventSource(`/api/stream/game-sync?gameId=${game.id}&token=${token}`);
+    gameSyncStreamRef.current = stream;
+
+    stream.onmessage = (event) => {
+      try {
+        const data = event.data ? JSON.parse(event.data) : null;
+        if (data?.game) {
+          // Update game state immediately when any player makes a change
+          setGame(data.game);
+          
+          // Update derived state based on new game data
+          if (data.game.winnerId) {
+            setWinnerUserId(data.game.winnerId);
+          }
+          if (data.game.miniGameState) {
+            setMiniGameState(data.game.miniGameState);
+          }
+          if (data.game.status === 'voting') {
+            setVotingResults(null);
+            setVoteProgress(null);
+            setVotes({});
+          }
+        }
+      } catch {
+        // ignore malformed events
+      }
+    };
+
+    stream.onerror = () => {
+      stream.close();
+      gameSyncStreamRef.current = null;
+    };
+
+    return () => {
+      stream.close();
+      gameSyncStreamRef.current = null;
+    };
+  }, [game?.id, token]);
 
   const myParticipant = game?.myParticipant;
   const myAssignedProfile = game?.myAssignedProfile;
@@ -278,39 +325,19 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
   }, [game?.id, loadClues, loadClueHistory]);
 
   useEffect(() => {
-    if (!game?.id || !token) return;
-
-    const stream = new EventSource(`/api/stream/mini-game?gameId=${game.id}&token=${token}`);
-    miniGameStreamRef.current = stream;
-
-    stream.onmessage = (event) => {
-      try {
-        const data = event.data ? JSON.parse(event.data) : null;
-        setMiniGameState(data);
-      } catch {
-        // ignore malformed events
-      }
-    };
-
-    stream.onerror = () => {
-      stream.close();
-      miniGameStreamRef.current = null;
-    };
-
-    return () => {
-      stream.close();
-      miniGameStreamRef.current = null;
-    };
-  }, [game?.id, token]);
-
-  useEffect(() => {
     if (!game?.id) return;
-    const clueInterval = setInterval(() => {
+    loadClues();
+    loadClueHistory();
+
+    // Also setup SSE for real-time clues updates from other players claiming clues
+    const cluesInterval = setInterval(() => {
       loadClues();
-      loadClueHistory();
-    }, 3000);
-    return () => clearInterval(clueInterval);
+    }, 5000); // Check every 5 seconds instead of 3
+
+    return () => clearInterval(cluesInterval);
   }, [game?.id, loadClues, loadClueHistory]);
+
+  // Mini-game state updates come from game-sync stream above, no need for separate endpoint
 
   useEffect(() => {
     if (!game?.participants?.length) return;
@@ -405,8 +432,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
       });
       
       toast.success('Gagnant déclaré ! Il peut maintenant réclamer un indice.');
-      const updatedGame = await fetchWithAuth('/games/current');
-      setGame(updatedGame);
+      // Game state will update automatically via game-sync stream
       setWinnerUserId(''); // Reset selection
     } catch (error) {
       toast.error('Erreur lors de la déclaration du gagnant');
@@ -420,8 +446,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
         body: JSON.stringify({ gameId: game.id, miniGames })
       });
       toast.success('Mini‑jeux mis à jour');
-      const updatedGame = await fetchWithAuth('/games/current');
-      setGame(updatedGame);
+      // Game state will update automatically via game-sync stream
     } catch (error) {
       toast.error('Erreur lors de la mise à jour des mini‑jeux');
     }
@@ -441,9 +466,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
 
       if (result?.letter) {
         toast.success(`Indice gagné: lettre "${result.letter}" sur ${getParticipantName(selectedTargetUserId)}`);
-        setGame({ ...game, winnerId: null }); // Reset winner status immediately
-        await loadClues();
-        await loadClueHistory();
+        // Game state updates via game-sync stream, clues load from SSE
         setSelectedTargetUserId(''); // Reset selection after success
       } else {
         toast.error('Erreur: aucune lettre retournée');
@@ -603,8 +626,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
       setVotingResults(null);
       setVoteProgress(null);
       setVotes({});
-      const updatedGame = await fetchWithAuth('/games/current');
-      setGame(updatedGame);
+      // Game state will update automatically via game-sync stream
     } catch (error) {
       toast.error('Erreur lors du démarrage du vote');
     }
@@ -631,7 +653,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
         }),
       });
       setVotes({...votes, [targetUserId]: guessedIdentityId });
-      loadVoteProgress();
+      // Vote progress updates via SSE stream, no need to fetch
       toast.success('Vote enregistré !');
     } catch (error) {
       toast.error('Erreur lors du vote');
@@ -645,8 +667,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
         body: JSON.stringify({ gameId: game.id, participantUserId }),
       });
       toast.success('Joueur supprimé');
-      const updatedGame = await fetchWithAuth('/games/current');
-      setGame(updatedGame);
+      // Game state will update automatically via game-sync stream
     } catch (error) {
       toast.error('Erreur lors de la suppression du joueur');
     }
@@ -659,8 +680,7 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
         body: JSON.stringify({ gameId: game.id }),
       });
       toast.success('Partie démarrée !');
-      const updatedGame = await fetchWithAuth('/games/current');
-      setGame(updatedGame);
+      // Game state will update automatically via game-sync stream
     } catch (error) {
       toast.error('Erreur lors du démarrage de la partie');
     }
