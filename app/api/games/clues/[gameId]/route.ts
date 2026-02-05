@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMongoDb } from '@/lib/mongodb';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
-export async function GET(request: NextRequest, context: { params: { gameId: string } }) {
+export async function GET(request: NextRequest, context: { params: Promise<{ gameId: string }> }) {
   try {
     const userId = await getAuthUserFromRequest(request);
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { gameId } = context.params;
+    const { gameId } = await context.params;
     if (!gameId || gameId === 'undefined' || gameId === 'null') {
       return NextResponse.json([]);
     }
