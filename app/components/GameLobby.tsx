@@ -129,7 +129,8 @@ export default function GameLobby() {
         body: JSON.stringify({ gameId }),
       });
       toast.success('Vous avez rejoint la partie !');
-      window.location.reload();
+      loadGames(); // Refresh the games list to remove the full game from available list
+      // Page.tsx will detect the change and navigate automatically via SSE
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Erreur');
     } finally {
