@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       };
 
       await send();
-      const interval = setInterval(send, 2000);
+      const interval = setInterval(send, 100); // Ultra-fast polling (100ms) for instant vote sync
 
       request.signal.addEventListener('abort', () => {
         clearInterval(interval);

@@ -329,10 +329,10 @@ export default function GameRoom({ game: initialGame }: GameRoomProps) {
     loadClues();
     loadClueHistory();
 
-    // Also setup SSE for real-time clues updates from other players claiming clues
+    // Ultra-fast polling for clues updates (200ms)
     const cluesInterval = setInterval(() => {
       loadClues();
-    }, 5000); // Check every 5 seconds instead of 3
+    }, 200); // Very fast refresh for instant sync
 
     return () => clearInterval(cluesInterval);
   }, [game?.id, loadClues, loadClueHistory]);
